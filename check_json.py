@@ -32,6 +32,22 @@ import requests.adapters
 
 logger = logging.getLogger("nagiosplugin")
 
+def to_bool(value) -> bool:
+    if value == 'true':
+        return True
+    elif value == 'True':
+        return True
+    elif value == 'false':
+        return False
+    elif value == 'False':
+        return False
+    elif value == 0:
+        return False
+    elif value == 1:
+        return True
+    else:
+        raise ValueError("Value was not recognized as a valid Boolean.")
+
 
 class NumericValue(nagiosplugin.Resource):
     name = "JSON API"
@@ -74,6 +90,7 @@ class NumericValue(nagiosplugin.Resource):
 
 @nagiosplugin.guarded()
 def main():
+    check_bool = None
     argp = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(
@@ -115,6 +132,14 @@ def main():
         help="<name/label>;<value filter/query>;<expected value>",
         action="append",
         default=[],
+    )
+    
+    argp.add_argument(
+        "--check-bool",
+        dest="check_bool",
+        help="check if the expected value from check-text is a boolean - True/False",
+        action="store_true",
+        default=False,
     )
 
     argp.add_argument('-v', '--verbose', action='count', default=0)
@@ -222,12 +247,12 @@ def main():
         check_text_ok_value_raw = jmespath.search(check_text_ok_filter, data)
 
         check_text_ok_value = None
-        if isinstance(check_text_ok_value_raw, str):
+        if isinstance(check_text_ok_value_raw, (str, bool)):
             check_text_ok_value = check_text_ok_value_raw
         elif isinstance(check_text_ok_value_raw, list) and len(check_text_ok_value_raw) > 0:
             check_text_ok_value = check_text_ok_value_raw[0]
-
-        if not isinstance(check_text_ok_value, str):
+        
+        if not isinstance(check_text_ok_value, (str, bool)):
             check.results.add(
                 nagiosplugin.Result(
                     state=nagiosplugin.Unknown,
@@ -236,6 +261,10 @@ def main():
             )
             continue
 
+        if args.check_bool:
+            check_text_ok_expected_value = to_bool(check_text_ok_expected_value)
+            
+        
         if check_text_ok_value == check_text_ok_expected_value:
             check.results.add(
                 nagiosplugin.Result(
@@ -252,7 +281,7 @@ def main():
                     )
                 )
             )
-
+    
     check.main(verbose=args.verbose)
 
 
